@@ -1,0 +1,147 @@
+// Workin code 
+// const { ipcRenderer } = require('electron');
+
+// window.addEventListener('DOMContentLoaded', () => {
+//   const video = document.querySelector('video');
+
+//   ipcRenderer.on('camera-control', async (event, command) => {
+//     if (command === 'open') {
+//       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+//       video.srcObject = stream;
+//       video.play();
+//     } else if (command === 'close') {
+//       if (video.srcObject) {
+//         video.srcObject.getTracks().forEach((track) => track.stop());
+//         video.srcObject = null;
+//       }
+//     }
+//   });
+// });
+
+// Working Code 2 
+
+// const { ipcRenderer } = require('electron');
+// const { io } = require("socket.io-client");
+// window.addEventListener('DOMContentLoaded', () => {
+//   const video = document.querySelector('video');
+//   const canvas = document.createElement('canvas');
+//   const socket = io('http://localhost:8000'); // Connect to the server
+
+//   ipcRenderer.on('camera-control', async (event, command) => {
+//     if (command === 'open') {
+//       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+//       video.srcObject = stream;
+//       video.play();
+
+//       // Capture frames and send to the admin panel
+//       const [track] = stream.getVideoTracks();
+//       const { width, height } = track.getSettings();
+//       canvas.width = width;
+//       canvas.height = height;
+
+//       const context = canvas.getContext('2d');
+
+//       setInterval(() => {
+//         context.drawImage(video, 0, 0, width, height);
+//         const frame = canvas.toDataURL('image/jpeg');
+//         socket.emit('camera-stream', frame);
+//       }, 100); // Send a frame every 100ms
+//     } else if (command === 'close') {
+//       if (video.srcObject) {
+//         video.srcObject.getTracks().forEach((track) => track.stop());
+//         video.srcObject = null;
+//       }
+//       socket.emit('camera-stream', null); // Notify to stop the stream
+//     }
+//   });
+// });
+ 
+// const { io } = require("socket.io-client");
+// const os = require("os"); // To fetch unique PC name or identifier
+// const socket = io("http://localhost:8000"); // Connect to backend
+
+// window.addEventListener("DOMContentLoaded", async () => {
+//   const pcId = os.hostname(); // Unique identifier for the PC
+
+//   try {
+//     // Notify backend of PC connection
+//     socket.emit("register-pc", pcId);
+
+//     // Start capturing frames
+//     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+//     const video = document.createElement("video");
+//     video.srcObject = stream;
+//     video.play();
+
+//     const canvas = document.createElement("canvas");
+//     const [track] = stream.getVideoTracks();
+//     const { width, height } = track.getSettings();
+//     canvas.width = width;
+//     canvas.height = height;
+
+//     const context = canvas.getContext("2d");
+
+//     setInterval(() => {
+//       context.drawImage(video, 0, 0, width, height);
+//       const frame = canvas.toDataURL("image/jpeg");
+//       socket.emit("camera-stream", { pcId, frame }); // Send frame with PC ID
+//     }, 100); // Capture frame every 100ms
+//   } catch (error) {
+//     console.error("Error capturing video:", error);
+//   }
+
+//   // Handle app close or disconnect
+//   window.addEventListener("beforeunload", () => {
+//     socket.emit("disconnect-pc", pcId); // Notify backend on disconnect
+//   });
+// });
+const { io } = require("socket.io-client");
+const os = require("os"); // To fetch unique PC name or identifier
+const socket = io("http://localhost:8000"); // Connect to backend
+
+window.addEventListener("DOMContentLoaded", async () => {
+  const pcId = os.hostname(); // Unique identifier for the PC
+
+  // Wait for socket to connect before registering the PC
+  socket.on("connect", () => {
+    console.log("Socket connected:", socket.id);
+    socket.emit("register-pc", pcId, (ack) => {
+      if (ack.success) {
+        console.log(`Registered successfully with server: ${pcId}`);
+        startCameraCapture(pcId); // Start camera capture after registration
+      } else {
+        console.error("Failed to register PC:", ack.message);
+      }
+    });
+  });
+
+  async function startCameraCapture(pcId) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.play();
+
+      const canvas = document.createElement("canvas");
+      const [track] = stream.getVideoTracks();
+      const { width, height } = track.getSettings();
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+
+      setInterval(() => {
+        context.drawImage(video, 0, 0, width, height);
+        const frame = canvas.toDataURL("image/jpeg");
+        socket.emit("camera-stream", { pcId, frame }); // Send frame with PC ID
+      }, 100);
+    } catch (error) {
+      console.error("Error capturing video:", error);
+    }
+  }
+
+  // Handle app close or disconnect
+  window.addEventListener("beforeunload", () => {
+    socket.emit("disconnect-pc", pcId);
+  });
+});
